@@ -483,6 +483,11 @@ button.link:hover {
   z-index: 10;
 }
 
+.modal-overlay[hidden] {
+  display: none !important;
+  pointer-events: none;
+}
+
 .modal {
   background: rgba(8, 22, 35, 0.95);
   border: 1px solid rgba(148, 163, 184, 0.28);
