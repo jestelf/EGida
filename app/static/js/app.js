@@ -4,6 +4,64 @@ const NODE_TYPES = ["api", "event", "service", "store", "task", "ui"];
 const NODE_STATUSES = ["active", "archived"];
 const EDGE_TYPES = ["uses", "produces", "consumes", "depends"];
 
+const CYRILLIC_TO_LATIN_MAP = {
+  а: "a",
+  б: "b",
+  в: "v",
+  г: "g",
+  д: "d",
+  е: "e",
+  ё: "e",
+  ж: "zh",
+  з: "z",
+  и: "i",
+  й: "i",
+  к: "k",
+  л: "l",
+  м: "m",
+  н: "n",
+  о: "o",
+  п: "p",
+  р: "r",
+  с: "s",
+  т: "t",
+  у: "u",
+  ф: "f",
+  х: "h",
+  ц: "ts",
+  ч: "ch",
+  ш: "sh",
+  щ: "sch",
+  ъ: "",
+  ы: "y",
+  ь: "",
+  э: "e",
+  ю: "yu",
+  я: "ya",
+};
+
+function transliterateCyrillic(value) {
+  return String(value || "")
+    .toLowerCase()
+    .split("")
+    .map((char) => (Object.prototype.hasOwnProperty.call(CYRILLIC_TO_LATIN_MAP, char) ? CYRILLIC_TO_LATIN_MAP[char] : char))
+    .join("");
+}
+
+function toSlug(value) {
+  if (typeof value !== "string" && typeof value !== "number") {
+    return "";
+  }
+  const transliterated = transliterateCyrillic(value);
+  return transliterated
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64);
+}
+
 const NODE_COLORS = {
   api: "#38bdf8",
   event: "#fb923c",
@@ -23,6 +81,25 @@ const EDGE_COLORS = {
 const DASHBOARD_SELECTOR =
   '[data-egida-entry="org-dashboard"], [data-controller="org-dashboard"]';
 const dashboardRegistry = new WeakMap();
+
+const STORAGE_KEYS = {
+  token: "egida:token",
+  organizationId: "egida:organization_id",
+};
+
+function isLocalStorageAvailable() {
+  try {
+    if (typeof window === "undefined" || !window.localStorage) {
+      return false;
+    }
+    const testKey = "__egida_storage_test__";
+    window.localStorage.setItem(testKey, "1");
+    window.localStorage.removeItem(testKey);
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
 
 function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -378,6 +455,7 @@ function debounce(fn, delay) {
 class OrgDashboard {
   constructor(root) {
     this.root = root;
+    this.storageEnabled = isLocalStorageAvailable();
     this.token = "";
     this.organizationId = "";
     this.members = [];
@@ -397,6 +475,7 @@ class OrgDashboard {
       edge: false,
       sphere: false,
       export: false,
+      organization: false,
     };
     this.filters = {
       sphereId: "",
@@ -424,6 +503,12 @@ class OrgDashboard {
       description: "",
       color: "#38bdf8",
     };
+    this.organizationForm = {
+      name: "",
+      slug: "",
+      description: "",
+    };
+    this.organizationSlugTouched = false;
     this.edgeCandidateNodes = [];
     this.exportData = "";
     this.activeNodeId = null;
@@ -442,6 +527,7 @@ class OrgDashboard {
 
   init() {
     this.cacheElements();
+    this.restoreCredentials();
     this.populateStaticOptions();
     const layers = createLayers();
     if (!layers) {
@@ -538,7 +624,13 @@ class OrgDashboard {
         description: root.querySelector('[data-field="sphere-description"]'),
         color: root.querySelector('[data-field="sphere-color"]'),
       },
+      organizationFormFields: {
+        name: root.querySelector('[data-field="organization-name"]'),
+        slug: root.querySelector('[data-field="organization-slug"]'),
+        description: root.querySelector('[data-field="organization-description"]'),
+      },
       exportField: root.querySelector('[data-field="export-data"]'),
+      createOrganizationButton: root.querySelector('[data-action="create-organization"]'),
     };
     this.modalOverlays = new Map();
     root.querySelectorAll('[data-modal]').forEach((overlay) => {
@@ -630,17 +722,31 @@ class OrgDashboard {
       nodeFormFields,
       edgeFormFields,
       sphereFormFields,
+      organizationFormFields,
       exportField,
+      createOrganizationButton,
     } = this.elements;
 
     if (tokenInput) {
       tokenInput.addEventListener("input", (event) => {
-        this.token = event.target.value;
+        const raw = event.target.value ?? "";
+        const value = raw.trim();
+        this.token = value;
+        if (raw !== value) {
+          event.target.value = value;
+        }
+        this.writeStoredValue(STORAGE_KEYS.token, value);
       });
     }
     if (orgInput) {
       orgInput.addEventListener("input", (event) => {
-        this.organizationId = event.target.value;
+        const raw = event.target.value ?? "";
+        const value = raw.trim();
+        this.organizationId = value;
+        if (raw !== value) {
+          event.target.value = value;
+        }
+        this.writeStoredValue(STORAGE_KEYS.organizationId, value);
       });
     }
     if (loadButton) {
@@ -742,6 +848,11 @@ class OrgDashboard {
         this.createSphere();
       });
     }
+    if (createOrganizationButton) {
+      createOrganizationButton.addEventListener("click", () => {
+        this.createOrganization();
+      });
+    }
     if (loadExportButton) {
       loadExportButton.addEventListener("click", () => {
         this.loadExport();
@@ -823,6 +934,31 @@ class OrgDashboard {
         this.sphereForm.color = event.target.value;
       });
     }
+    if (organizationFormFields?.name) {
+      organizationFormFields.name.addEventListener("input", (event) => {
+        const value = event.target.value ?? "";
+        this.organizationForm.name = value;
+        if (!this.organizationSlugTouched && organizationFormFields.slug) {
+          const generated = toSlug(value);
+          this.organizationForm.slug = generated;
+          organizationFormFields.slug.value = generated;
+        }
+      });
+    }
+    if (organizationFormFields?.slug) {
+      organizationFormFields.slug.addEventListener("input", (event) => {
+        const raw = event.target.value ?? "";
+        this.organizationSlugTouched = true;
+        const normalized = toSlug(raw);
+        this.organizationForm.slug = normalized;
+        event.target.value = normalized;
+      });
+    }
+    if (organizationFormFields?.description) {
+      organizationFormFields.description.addEventListener("input", (event) => {
+        this.organizationForm.description = event.target.value ?? "";
+      });
+    }
     if (exportField) {
       exportField.addEventListener("input", (event) => {
         this.exportData = event.target.value;
@@ -862,6 +998,7 @@ class OrgDashboard {
     this.updateNodeFormFields();
     this.updateEdgeFormFields();
     this.updateSphereFormFields();
+    this.updateOrganizationFormFields();
     this.updateExportField();
   }
 
@@ -1270,6 +1407,31 @@ class OrgDashboard {
     }
   }
 
+  updateOrganizationFormFields() {
+    const { organizationFormFields } = this.elements;
+    if (!organizationFormFields) {
+      return;
+    }
+    if (organizationFormFields.name) {
+      organizationFormFields.name.value = this.organizationForm.name;
+    }
+    if (organizationFormFields.slug) {
+      organizationFormFields.slug.value = this.organizationForm.slug;
+    }
+    if (organizationFormFields.description) {
+      organizationFormFields.description.value = this.organizationForm.description;
+    }
+  }
+
+  resetOrganizationForm() {
+    this.organizationForm = {
+      name: "",
+      slug: "",
+      description: "",
+    };
+    this.organizationSlugTouched = false;
+  }
+
   updateExportField() {
     const { exportField } = this.elements;
     if (!exportField) {
@@ -1278,13 +1440,132 @@ class OrgDashboard {
     exportField.value = this.exportData;
   }
 
+  readStoredValue(key) {
+    if (!this.storageEnabled || typeof window === "undefined") {
+      return "";
+    }
+    try {
+      const value = window.localStorage.getItem(key);
+      return value ?? "";
+    } catch (error) {
+      this.storageEnabled = false;
+      return "";
+    }
+  }
+
+  writeStoredValue(key, value) {
+    if (!this.storageEnabled || typeof window === "undefined") {
+      return;
+    }
+    try {
+      if (value && value.length > 0) {
+        window.localStorage.setItem(key, value);
+      } else {
+        window.localStorage.removeItem(key);
+      }
+    } catch (error) {
+      this.storageEnabled = false;
+    }
+  }
+
+  restoreCredentials() {
+    const storedToken = this.readStoredValue(STORAGE_KEYS.token);
+    const storedOrg = this.readStoredValue(STORAGE_KEYS.organizationId);
+    if (storedToken) {
+      this.token = storedToken;
+      if (this.elements.tokenInput) {
+        this.elements.tokenInput.value = storedToken;
+      }
+    }
+    if (storedOrg) {
+      this.organizationId = storedOrg;
+      if (this.elements.orgInput) {
+        this.elements.orgInput.value = storedOrg;
+      }
+    }
+  }
+
   authHeaders(extra = {}) {
     const headers = { ...extra };
-    const token = this.token.trim();
+    let token = this.token.trim();
+    if (!token) {
+      const stored = this.readStoredValue(STORAGE_KEYS.token).trim();
+      if (stored) {
+        token = stored;
+        this.token = stored;
+        if (this.elements.tokenInput && !this.elements.tokenInput.value) {
+          this.elements.tokenInput.value = stored;
+        }
+      }
+    }
     if (token) {
       headers.Authorization = `Bearer ${token}`;
     }
     return headers;
+  }
+
+  ensureToken() {
+    let token = this.token.trim();
+    if (!token) {
+      const storedToken = this.readStoredValue(STORAGE_KEYS.token).trim();
+      if (storedToken) {
+        token = storedToken;
+        this.token = storedToken;
+        if (this.elements.tokenInput && !this.elements.tokenInput.value) {
+          this.elements.tokenInput.value = storedToken;
+        }
+      }
+    }
+    if (!token) {
+      this.error = "Введите токен доступа";
+      this.notice = "";
+      this.updateUI();
+      return null;
+    }
+    this.token = token;
+    this.writeStoredValue(STORAGE_KEYS.token, token);
+    if (this.elements.tokenInput) {
+      this.elements.tokenInput.value = token;
+    }
+    return token;
+  }
+
+  ensureAuthContext() {
+    const token = this.ensureToken();
+    if (!token) {
+      return null;
+    }
+    let rawOrgId = String(this.organizationId ?? "").trim();
+    if (!rawOrgId) {
+      const storedOrg = this.readStoredValue(STORAGE_KEYS.organizationId).trim();
+      if (storedOrg) {
+        rawOrgId = storedOrg;
+        this.organizationId = storedOrg;
+        if (this.elements.orgInput && !this.elements.orgInput.value) {
+          this.elements.orgInput.value = storedOrg;
+        }
+      }
+    }
+    if (!rawOrgId) {
+      this.error = "Укажите идентификатор организации";
+      this.notice = "";
+      this.updateUI();
+      return null;
+    }
+    const organizationId = Number(rawOrgId);
+    if (!Number.isFinite(organizationId) || organizationId <= 0) {
+      this.error = "Некорректный идентификатор организации";
+      this.notice = "";
+      this.updateUI();
+      return null;
+    }
+    const normalized = String(organizationId);
+    this.organizationId = normalized;
+    this.writeStoredValue(STORAGE_KEYS.organizationId, normalized);
+    if (this.elements.orgInput) {
+      this.elements.orgInput.value = normalized;
+    }
+    return organizationId;
   }
 
   applyMapData(payload) {
@@ -1398,15 +1679,13 @@ class OrgDashboard {
   }
 
   async loadOrg() {
-    if (!this.token.trim() || !this.organizationId) {
-      this.error = "Укажите токен и идентификатор организации";
-      this.notice = "";
-      this.updateUI();
-      return;
+    const organizationId = this.ensureAuthContext();
+    if (organizationId === null) {
+      return false;
     }
     this.error = "";
     this.notice = "";
-    const orgId = String(this.organizationId).trim();
+    const orgId = String(organizationId);
     const headers = this.authHeaders();
     const params = new URLSearchParams({ organization_id: orgId });
     try {
@@ -1431,10 +1710,12 @@ class OrgDashboard {
       this.notice = "Данные организации загружены";
       this.error = "";
       this.updateUI();
+      return true;
     } catch (error) {
       this.error = error instanceof Error ? error.message : "Не удалось загрузить организацию";
       this.notice = "";
       this.updateUI();
+      return false;
     }
   }
 
@@ -1693,6 +1974,9 @@ class OrgDashboard {
     if (name === "export") {
       this.loadExport();
     }
+    if (name === "organization") {
+      this.resetOrganizationForm();
+    }
     this.updateUI();
   }
 
@@ -1724,7 +2008,79 @@ class OrgDashboard {
     this.updateUI();
   }
 
+  async createOrganization() {
+    const token = this.ensureToken();
+    if (!token) {
+      return;
+    }
+    const name = this.organizationForm.name.trim();
+    if (!name) {
+      this.error = "Укажите название организации";
+      this.notice = "";
+      this.updateUI();
+      return;
+    }
+    let slug = this.organizationForm.slug.trim();
+    if (!slug) {
+      slug = toSlug(name);
+    }
+    if (!slug) {
+      slug = `org-${Date.now()}`;
+    }
+    this.organizationForm.slug = slug;
+    const description = this.organizationForm.description.trim();
+    const payload = { name, slug };
+    if (description) {
+      payload.description = description;
+    }
+    const headers = this.authHeaders({ "Content-Type": "application/json" });
+    this.notice = "";
+    this.error = "";
+    try {
+      const response = await ensureOk(
+        await fetch("/api/organizations", {
+          method: "POST",
+          headers,
+          body: JSON.stringify(payload),
+        }),
+        "Не удалось создать организацию",
+      );
+      const data = await response.json();
+      const createdId = Number(data?.id);
+      const displayName =
+        typeof data?.name === "string" && data.name.trim() ? data.name.trim() : name;
+      this.modals.organization = false;
+      let normalizedId = null;
+      if (Number.isFinite(createdId) && createdId > 0) {
+        normalizedId = String(createdId);
+        this.organizationId = normalizedId;
+        this.writeStoredValue(STORAGE_KEYS.organizationId, normalizedId);
+        if (this.elements.orgInput) {
+          this.elements.orgInput.value = normalizedId;
+        }
+      }
+      this.resetOrganizationForm();
+      let loaded = true;
+      if (normalizedId) {
+        loaded = (await this.loadOrg()) !== false;
+      } else {
+        this.updateUI();
+      }
+      if (loaded) {
+        this.notice = `Организация "${displayName}" создана`;
+        this.error = "";
+        this.updateUI();
+      }
+    } catch (error) {
+      this.error = error instanceof Error ? error.message : "Ошибка создания организации";
+      this.updateUI();
+    }
+  }
+
   async createNode() {
+    if (this.ensureAuthContext() === null) {
+      return;
+    }
     if (!this.nodeForm.sphereId || !this.nodeForm.label.trim()) {
       this.error = "Заполните сферу и название узла";
       this.updateUI();
@@ -1782,6 +2138,9 @@ class OrgDashboard {
   }
 
   async createEdge() {
+    if (this.ensureAuthContext() === null) {
+      return;
+    }
     if (!this.edgeForm.sphereId || !this.edgeForm.source || !this.edgeForm.target) {
       this.error = "Выберите сферу и оба узла";
       this.updateUI();
@@ -1824,13 +2183,17 @@ class OrgDashboard {
   }
 
   async createSphere() {
+    const organizationId = this.ensureAuthContext();
+    if (organizationId === null) {
+      return;
+    }
     if (!this.sphereForm.name.trim()) {
       this.error = "Укажите название сферы";
       this.updateUI();
       return;
     }
     const payload = {
-      organization_id: Number(this.organizationId),
+      organization_id: organizationId,
       name: this.sphereForm.name.trim(),
       description: this.sphereForm.description,
       color: this.sphereForm.color,
