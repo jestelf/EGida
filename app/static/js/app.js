@@ -1503,7 +1503,6 @@ class OrgDashboard {
     }
     return headers;
   }
-
   ensureToken() {
     let token = this.token.trim();
     if (!token) {
