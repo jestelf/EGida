@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from app.models.organization import OrganizationRole
 
@@ -52,7 +52,9 @@ class GroupBase(BaseModel):
 
 
 class GroupCreate(GroupBase):
-    organization_id: int
+    organization_id: int = Field(
+        validation_alias=AliasChoices("organization_id", "organizationId")
+    )
 
 
 class GroupUpdate(BaseModel):
@@ -83,27 +85,63 @@ class GroupRead(GroupBase):
 
 
 class SphereBase(BaseModel):
-    name: str
+    name: str = Field(validation_alias=AliasChoices("name", "label"))
     description: Optional[str] = None
     color: Optional[str] = None
-    center_x: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    center_y: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    radius: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    center_x: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        validation_alias=AliasChoices("center_x", "centerX"),
+    )
+    center_y: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        validation_alias=AliasChoices("center_y", "centerY"),
+    )
+    radius: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        validation_alias=AliasChoices("radius", "sphereRadius"),
+    )
 
 
 class SphereCreate(SphereBase):
-    organization_id: int
-    group_ids: List[int] = Field(default_factory=list)
+    organization_id: int = Field(
+        validation_alias=AliasChoices("organization_id", "organizationId")
+    )
+    group_ids: List[int] = Field(
+        default_factory=list, validation_alias=AliasChoices("group_ids", "groupIds")
+    )
 
 
 class SphereUpdate(BaseModel):
-    name: Optional[str] = None
+    name: Optional[str] = Field(default=None, validation_alias=AliasChoices("name", "label"))
     description: Optional[str] = None
     color: Optional[str] = None
-    center_x: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    center_y: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    radius: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    group_ids: Optional[List[int]] = None
+    center_x: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        validation_alias=AliasChoices("center_x", "centerX"),
+    )
+    center_y: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        validation_alias=AliasChoices("center_y", "centerY"),
+    )
+    radius: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        validation_alias=AliasChoices("radius", "sphereRadius"),
+    )
+    group_ids: Optional[List[int]] = Field(
+        default=None, validation_alias=AliasChoices("group_ids", "groupIds")
+    )
 
 
 class SphereRead(SphereBase):
@@ -116,14 +154,31 @@ class SphereRead(SphereBase):
 
 
 class SphereLayoutItem(BaseModel):
-    sphere_id: int
-    center_x: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    center_y: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    radius: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    sphere_id: int = Field(validation_alias=AliasChoices("sphere_id", "sphereId"))
+    center_x: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        validation_alias=AliasChoices("center_x", "centerX"),
+    )
+    center_y: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        validation_alias=AliasChoices("center_y", "centerY"),
+    )
+    radius: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        validation_alias=AliasChoices("radius", "sphereRadius"),
+    )
 
 
 class SphereLayoutRequest(BaseModel):
-    organization_id: int
+    organization_id: int = Field(
+        validation_alias=AliasChoices("organization_id", "organizationId")
+    )
     layout: List[SphereLayoutItem]
 
 

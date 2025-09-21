@@ -3,6 +3,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.api.routes import graph as graph_routes
+from app.api.routes import spheres as spheres_routes
 from app.db.base import Base
 from app.models import Organization, OrganizationMember, OrganizationRole, Sphere
 from app.schemas.graph import EdgeCreate, NodeCreate, NodeUpdate
@@ -65,29 +66,35 @@ def test_node_and_edge_crud(session):
     )
     assert len(listed) == 1
 
-    update_payload = NodeUpdate(status="archived")
+    update_payload = NodeUpdate.model_validate({"archived": True})
     updated_node = graph_routes.update_node(created_node.id, update_payload, owner, session)
     assert updated_node.status == "archived"
 
-    node_payload_2 = NodeCreate(
-        sphere_id=sphere.id,
-        label="Event Bus",
-        node_type="event",
-        status="active",
-        summary="Событийная шина",
-        position={"x": 0.6, "y": 0.6},
-        metadata={},
-        links=[],
-        owners=[],
+    node_payload_2 = NodeCreate.model_validate(
+        {
+            "sphereId": sphere.id,
+            "name": "Event Bus",
+            "nodeType": "event",
+            "archived": False,
+            "summary": "Событийная шина",
+            "position": {"x": 0.6, "y": 0.6},
+            "metadata": {},
+            "links": "https://docs, https://status",
+            "owners": ["bob"],
+        }
     )
     created_node_2 = graph_routes.create_node(node_payload_2, owner, session)
+    assert created_node_2.status == "active"
+    assert created_node_2.links == ["https://docs", "https://status"]
 
-    edge_payload = EdgeCreate(
-        sphere_id=sphere.id,
-        source_node_id=created_node.id,
-        target_node_id=created_node_2.id,
-        relation_type="uses",
-        metadata={"note": "calls events"},
+    edge_payload = EdgeCreate.model_validate(
+        {
+            "sphereId": sphere.id,
+            "sourceNodeId": created_node.id,
+            "targetNodeId": created_node_2.id,
+            "relationType": "uses",
+            "metadata": {"note": "calls events"},
+        }
     )
     created_edge = graph_routes.create_edge(edge_payload, owner, session)
     assert created_edge.relation_type == "uses"
@@ -114,4 +121,28 @@ def test_node_and_edge_crud(session):
         session=session,
     )
     assert remaining_nodes == []
+
+
+def test_sphere_create_accepts_camel_case_payload(session):
+    owner, org, _ = bootstrap_org(session)
+
+    payload = SphereCreate.model_validate(
+        {
+            "organizationId": org.id,
+            "name": "Integration",
+            "description": "Camel case payload",
+            "color": "#112233",
+            "centerX": 0.3,
+            "centerY": 0.4,
+            "radius": 0.25,
+            "groupIds": [],
+        }
+    )
+
+    created = spheres_routes.create_sphere(payload, owner, session)
+    assert created.organization_id == org.id
+    assert created.name == "Integration"
+    assert created.center_x == 0.3
+    assert created.center_y == 0.4
+    assert created.radius == 0.25
 
