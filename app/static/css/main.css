@@ -458,6 +458,10 @@ button.link:hover {
   z-index: 6;
 }
 
+.fab-menu[hidden] {
+  display: none !important;
+}
+
 .fab-menu button {
   background: transparent;
   border: none;
