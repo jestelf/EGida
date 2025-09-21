@@ -81,8 +81,13 @@ def list_nodes(
         query = query.where(Node.node_type == node_type)
     if status_filter is not None:
         query = query.where(Node.status == status_filter)
-    if search:
-        like = f"%{search.lower()}%"
+    search_value: Optional[str]
+    if isinstance(search, str):
+        search_value = search.strip().lower()
+    else:
+        search_value = None
+    if search_value:
+        like = f"%{search_value}%"
         query = query.where(Node.label.ilike(like) | Node.summary.ilike(like))
 
     nodes = session.scalars(query.order_by(Node.created_at.desc())).all()
