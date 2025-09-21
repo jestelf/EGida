@@ -20,6 +20,201 @@ const EDGE_COLORS = {
   depends: "#94a3b8",
 };
 
+const DASHBOARD_SELECTOR =
+  '[data-egida-entry="org-dashboard"], [data-controller="org-dashboard"]';
+const dashboardRegistry = new WeakMap();
+
+function isRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeStringArray(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (typeof item === "string") {
+          return item.trim();
+        }
+        if (item === null || item === undefined) {
+          return "";
+        }
+        return String(item).trim();
+      })
+      .filter((item) => item.length > 0);
+  }
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function normalizePositionPayload(raw) {
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      return normalizePositionPayload(parsed);
+    } catch (error) {
+      return { x: 0.5, y: 0.5 };
+    }
+  }
+  if (Array.isArray(raw)) {
+    const [x, y] = raw;
+    return {
+      x: clamp(normalizeNumber(x, 0.5), 0, 1),
+      y: clamp(normalizeNumber(y, 0.5), 0, 1),
+    };
+  }
+  if (isRecord(raw)) {
+    const candidate = raw;
+    const xSource =
+      candidate.x ??
+      candidate.X ??
+      candidate.left ??
+      candidate.lng ??
+      candidate.lon ??
+      candidate.longitude ??
+      candidate[0];
+    const ySource =
+      candidate.y ??
+      candidate.Y ??
+      candidate.top ??
+      candidate.lat ??
+      candidate.latitude ??
+      candidate[1];
+    return {
+      x: clamp(normalizeNumber(xSource, 0.5), 0, 1),
+      y: clamp(normalizeNumber(ySource, 0.5), 0, 1),
+    };
+  }
+  if (typeof raw === "number") {
+    const numeric = clamp(normalizeNumber(raw, 0.5), 0, 1);
+    return { x: numeric, y: 0.5 };
+  }
+  return { x: 0.5, y: 0.5 };
+}
+
+function normalizeSpherePayload(raw) {
+  if (!isRecord(raw)) {
+    return null;
+  }
+  const id = Number(raw.id ?? raw.sphere_id ?? raw.sphereId);
+  if (!Number.isFinite(id)) {
+    return null;
+  }
+  const nameCandidate =
+    typeof raw.name === "string"
+      ? raw.name
+      : typeof raw.label === "string"
+        ? raw.label
+        : undefined;
+  const normalized = { ...raw, id };
+  normalized.name = nameCandidate && nameCandidate.trim() ? nameCandidate.trim() : `Сфера ${id}`;
+  normalized.center_x = clamp(normalizeNumber(raw.center_x ?? raw.centerX, 0.5), 0, 1);
+  normalized.center_y = clamp(normalizeNumber(raw.center_y ?? raw.centerY, 0.5), 0, 1);
+  normalized.radius = clamp(
+    normalizeNumber(raw.radius ?? raw.sphereRadius ?? DEFAULT_RADIUS, DEFAULT_RADIUS),
+    0.08,
+    0.48,
+  );
+  if (typeof raw.color === "string") {
+    normalized.color = raw.color;
+  }
+  if (!Array.isArray(raw.groups)) {
+    normalized.groups = [];
+  }
+  const organizationId = Number(raw.organization_id ?? raw.organizationId ?? raw.org_id ?? raw.orgId);
+  if (Number.isFinite(organizationId)) {
+    normalized.organization_id = organizationId;
+  }
+  return normalized;
+}
+
+function normalizeNodePayload(raw) {
+  if (!isRecord(raw)) {
+    return null;
+  }
+  const id = Number(raw.id ?? raw.node_id ?? raw.nodeId);
+  const sphereId = Number(raw.sphere_id ?? raw.sphereId);
+  if (!Number.isFinite(id) || !Number.isFinite(sphereId)) {
+    return null;
+  }
+  const labelCandidate =
+    typeof raw.label === "string"
+      ? raw.label
+      : typeof raw.name === "string"
+        ? raw.name
+        : typeof raw.title === "string"
+          ? raw.title
+          : undefined;
+  const nodeTypeRaw = (raw.node_type ?? raw.nodeType ?? raw.kind ?? "service").toString().toLowerCase();
+  const nodeType = NODE_TYPES.includes(nodeTypeRaw) ? nodeTypeRaw : "service";
+  const statusRaw = (raw.status ?? (raw.archived ? "archived" : "active") ?? "active")
+    .toString()
+    .toLowerCase();
+  const status = NODE_STATUSES.includes(statusRaw) ? statusRaw : "active";
+  let positionPayload = raw.position;
+  if (!positionPayload || (isRecord(positionPayload) && !Object.keys(positionPayload).length)) {
+    positionPayload = { x: raw.x, y: raw.y };
+  }
+  const position = normalizePositionPayload(positionPayload);
+  const metadata = isRecord(raw.metadata) ? raw.metadata : {};
+  const links = normalizeStringArray(raw.links ?? raw.links_json ?? metadata.links ?? []);
+  const owners = normalizeStringArray(raw.owners ?? raw.owners_json ?? metadata.owners ?? []);
+  const summary = typeof raw.summary === "string" ? raw.summary : "";
+  const normalized = {
+    ...raw,
+    id,
+    sphere_id: sphereId,
+    label: labelCandidate && labelCandidate.trim() ? labelCandidate.trim() : `Узел ${id}`,
+    node_type: nodeType,
+    status,
+    position,
+    metadata,
+    links,
+    owners,
+    summary,
+  };
+  const createdAt = raw.created_at ?? raw.createdAt;
+  if (createdAt !== undefined) {
+    normalized.created_at = createdAt;
+  }
+  return normalized;
+}
+
+function normalizeEdgePayload(raw) {
+  if (!isRecord(raw)) {
+    return null;
+  }
+  const id = Number(raw.id ?? raw.edge_id ?? raw.edgeId);
+  const sphereId = Number(raw.sphere_id ?? raw.sphereId);
+  const source = Number(raw.source_node_id ?? raw.sourceNodeId ?? raw.from_node_id ?? raw.fromNodeId);
+  const target = Number(raw.target_node_id ?? raw.targetNodeId ?? raw.to_node_id ?? raw.toNodeId);
+  if (!Number.isFinite(id) || !Number.isFinite(source) || !Number.isFinite(target)) {
+    return null;
+  }
+  const relationRaw = (raw.relation_type ?? raw.relationType ?? raw.type ?? "depends")
+    .toString()
+    .toLowerCase();
+  const relationType = EDGE_TYPES.includes(relationRaw) ? relationRaw : "depends";
+  const metadata = isRecord(raw.metadata) ? raw.metadata : {};
+  const normalized = {
+    ...raw,
+    id,
+    sphere_id: Number.isFinite(sphereId) ? sphereId : null,
+    source_node_id: source,
+    target_node_id: target,
+    relation_type: relationType,
+    metadata,
+  };
+  if (!Number.isFinite(normalized.sphere_id)) {
+    delete normalized.sphere_id;
+  }
+  return normalized;
+}
+
 function clamp(value, min = 0, max = 1) {
   return Math.min(max, Math.max(min, value));
 }
@@ -1093,9 +1288,12 @@ class OrgDashboard {
   }
 
   applyMapData(payload) {
-    const spheres = payload?.spheres ?? [];
-    const nodes = payload?.nodes ?? [];
-    const edges = payload?.edges ?? [];
+    const rawSpheres = Array.isArray(payload?.spheres) ? payload.spheres : [];
+    const rawNodes = Array.isArray(payload?.nodes) ? payload.nodes : [];
+    const rawEdges = Array.isArray(payload?.edges) ? payload.edges : [];
+    const spheres = rawSpheres.map(normalizeSpherePayload).filter(Boolean);
+    const nodes = rawNodes.map(normalizeNodePayload).filter(Boolean);
+    const edges = rawEdges.map(normalizeEdgePayload).filter(Boolean);
     const incomingIds = spheres.map((sphere) => sphere.id);
     const previous = new Set(this.visibleSphereIds);
     const nextVisible = new Set();
@@ -1825,11 +2023,78 @@ class OrgDashboard {
   }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  const root = document.querySelector('[data-controller="org-dashboard"]');
-  if (!root) {
-    return;
+function collectDashboardRoots(scope) {
+  const candidates = [];
+  if (!scope) {
+    return candidates;
   }
-  const dashboard = new OrgDashboard(root);
-  dashboard.init();
-});
+  if (scope instanceof HTMLElement && scope.matches(DASHBOARD_SELECTOR)) {
+    candidates.push(scope);
+  }
+  if (typeof scope.querySelectorAll === "function") {
+    scope.querySelectorAll(DASHBOARD_SELECTOR).forEach((element) => {
+      if (element instanceof HTMLElement) {
+        candidates.push(element);
+      }
+    });
+  }
+  const unique = [];
+  const seen = new Set();
+  candidates.forEach((element) => {
+    if (!seen.has(element)) {
+      seen.add(element);
+      unique.push(element);
+    }
+  });
+  return unique;
+}
+
+function initOrgDashboard(root) {
+  if (!(root instanceof HTMLElement)) {
+    return null;
+  }
+  if (dashboardRegistry.has(root)) {
+    return dashboardRegistry.get(root) || null;
+  }
+  const instance = new OrgDashboard(root);
+  try {
+    instance.init();
+    dashboardRegistry.set(root, instance);
+    return instance;
+  } catch (error) {
+    dashboardRegistry.delete(root);
+    console.error("Не удалось инициализировать org-dashboard", error);
+    return null;
+  }
+}
+
+function bootstrapOrgDashboards(scope = document) {
+  return collectDashboardRoots(scope).map((root) => initOrgDashboard(root)).filter(Boolean);
+}
+
+function setupDashboardEntrypoints() {
+  const runInitial = () => {
+    bootstrapOrgDashboards(document);
+  };
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", runInitial, { once: true });
+  } else {
+    runInitial();
+  }
+  const handleHtmxEvent = (event) => {
+    const target = event.target;
+    const isFragment =
+      typeof DocumentFragment !== "undefined" && target instanceof DocumentFragment;
+    if (target instanceof HTMLElement || isFragment) {
+      bootstrapOrgDashboards(target);
+    }
+  };
+  document.addEventListener("htmx:load", handleHtmxEvent);
+  document.addEventListener("htmx:afterSwap", handleHtmxEvent);
+}
+
+window.egida = window.egida || {};
+window.egida.initOrgDashboard = initOrgDashboard;
+window.egida.bootstrapOrgDashboards = bootstrapOrgDashboards;
+
+setupDashboardEntrypoints();
