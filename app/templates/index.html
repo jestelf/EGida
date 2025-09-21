@@ -1,7 +1,7 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 
 {% block content %}
-<section class="workspace" x-data="orgDashboard()" x-init="init()" x-cloak>
+<section class="workspace" data-controller="org-dashboard">
   <aside class="sidebar">
     <header class="sidebar-header">
       <h1>{{ project_name }}</h1>
@@ -11,255 +11,184 @@
     <section class="sidebar-block" id="connection">
       <h2>Подключение</h2>
       <label class="field-label" for="token">Bearer токен</label>
-      <input id="token" class="field-input" type="password" x-model="token" placeholder="Введите access token" />
+      <input id="token" class="field-input" type="password" placeholder="Введите access token" autocomplete="off" />
       <label class="field-label" for="org-id">ID организации</label>
-      <input id="org-id" class="field-input" type="number" x-model.number="organizationId" placeholder="1" />
-      <button class="primary" @click="loadOrg" title="Загрузить данные">Загрузить</button>
-      <div class="alert" x-show="error" x-text="error"></div>
-      <p class="hint success" x-show="notice" x-text="notice"></p>
+      <input id="org-id" class="field-input" type="number" placeholder="1" />
+      <button class="primary" data-action="load-org" title="Загрузить данные">Загрузить</button>
+      <div class="alert" data-role="error" hidden></div>
+      <p class="hint success" data-role="notice" hidden></p>
     </section>
 
     <section class="sidebar-block" id="search">
       <h2>Поиск</h2>
-      <input class="field-input" type="search" placeholder="Название, описание, ответственные" x-model="filters.search" @input.debounce.300ms="applyFilters" />
+      <input class="field-input" type="search" placeholder="Название, описание, ответственные" data-role="search" />
     </section>
 
     <section class="sidebar-block" id="filters">
       <h2>Фильтры</h2>
       <label class="field-label">Сфера</label>
-      <select class="field-input" x-model="filters.sphereId" @change="applyFilters" title="Показать узлы только выбранной сферы">
+      <select class="field-input" data-role="filter-sphere" title="Показать узлы только выбранной сферы">
         <option value="">Все</option>
-        <template x-for="sphere in spheres" :key="`filter-sphere-${sphere.id}`">
-          <option :value="sphere.id" x-text="sphere.name"></option>
-        </template>
       </select>
       <label class="field-label">Тип узла</label>
-      <select class="field-input" x-model="filters.type" @change="applyFilters" title="Фильтр по типу узла">
+      <select class="field-input" data-role="filter-type" title="Фильтр по типу узла">
         <option value="">Все</option>
-        <template x-for="type in nodeTypeOptions" :key="`filter-type-${type}`">
-          <option :value="type" x-text="type"></option>
-        </template>
       </select>
       <label class="field-label">Статус</label>
-      <select class="field-input" x-model="filters.status" @change="applyFilters" title="Фильтр по статусу">
+      <select class="field-input" data-role="filter-status" title="Фильтр по статусу">
         <option value="">Все</option>
-        <template x-for="status in nodeStatusOptions" :key="`filter-status-${status}`">
-          <option :value="status" x-text="status"></option>
-        </template>
       </select>
     </section>
 
-    <section class="sidebar-block" id="spheres-panel" x-show="spheres.length">
+    <section class="sidebar-block" id="spheres-panel" data-role="spheres-panel" hidden>
       <h2>Сферы</h2>
-      <ul class="sphere-list">
-        <template x-if="!spheres.length">
-          <li class="muted">Сферы пока не загружены</li>
-        </template>
-        <template x-for="sphere in spheres" :key="`sphere-${sphere.id}`">
-          <li :class="{'is-focused': focusSphereId === sphere.id}">
-            <span class="sphere-name" :style="`--sphere-color:${sphere.color || '#38bdf8'}`" x-text="sphere.name"></span>
-            <div class="toggle">
-              <button class="link" @click.stop="focusSphere(sphere.id)" x-text="focusSphereId === sphere.id ? 'сбросить' : 'фокус'"></button>
-              <button class="link" @click.stop="toggleSphere(sphere.id)" x-text="isSphereVisible(sphere.id) ? 'скрыть' : 'показать'"></button>
-            </div>
-          </li>
-        </template>
-      </ul>
+      <ul class="sphere-list" data-role="sphere-list"></ul>
       <div class="toggle layout-toggle">
         <span class="muted">Схема:</span>
-        <button class="secondary" :class="{'is-active': layoutMode === 'saved'}" @click="setLayoutMode('saved')">Сохранённая</button>
-        <button class="secondary" :class="{'is-active': layoutMode === 'radial'}" @click="setLayoutMode('radial')">Радиальная</button>
-        <button class="secondary" :class="{'is-active': layoutMode === 'grid'}" @click="setLayoutMode('grid')">Сетка</button>
+        <button class="secondary" data-layout="saved">Сохранённая</button>
+        <button class="secondary" data-layout="radial">Радиальная</button>
+        <button class="secondary" data-layout="grid">Сетка</button>
       </div>
     </section>
 
     <section class="sidebar-block" id="quick-list">
       <h2>Активные узлы</h2>
-      <ul class="mini-list">
-        <template x-if="!filteredNodes().length">
-          <li class="muted">Нет узлов под условия</li>
-        </template>
-        <template x-for="node in filteredNodes().slice(0, 8)" :key="`mini-${node.id}`">
-          <li @click="openNodeCard(node.id)" title="Открыть карточку">
-            <span class="mini-dot" :style="`--dot-color:${NODE_COLORS[node.node_type] || '#38bdf8'}`"></span>
-            <div>
-              <strong x-text="node.label"></strong>
-              <p class="muted" x-text="node.node_type + ' · ' + node.status"></p>
-            </div>
-          </li>
-        </template>
-      </ul>
+      <ul class="mini-list" data-role="quick-list"></ul>
     </section>
   </aside>
 
   <section class="map-shell">
     <div class="map-container">
       <div id="cy" class="map-view" title="Интерактивная карта"></div>
-      <div class="fab" title="Создать" @click.stop="toggleActions">+</div>
-      <div class="fab-menu" x-show="modals.actions" @click.away="closeModal('actions')" x-transition>
-        <button @click="closeModal('actions'); openModal('node')" title="Добавить узел">Добавить узел</button>
-        <button @click="closeModal('actions'); openModal('edge')" title="Добавить связь">Добавить связь</button>
-        <button @click="closeModal('actions'); openModal('sphere')" title="Создать сферу">Создать сферу</button>
-        <button @click="closeModal('actions'); openModal('export')" title="Экспорт/импорт">Экспорт / импорт</button>
+      <div class="fab" title="Создать" data-action="toggle-actions">+</div>
+      <div class="fab-menu" data-role="fab-menu" hidden>
+        <button data-open-modal="node" title="Добавить узел">Добавить узел</button>
+        <button data-open-modal="edge" title="Добавить связь">Добавить связь</button>
+        <button data-open-modal="sphere" title="Создать сферу">Создать сферу</button>
+        <button data-open-modal="export" title="Экспорт/импорт">Экспорт / импорт</button>
       </div>
 
-      <div class="node-card" x-show="activeNode" x-transition>
+      <div class="node-card" data-role="node-card" hidden>
         <header>
-          <h3 x-text="activeNode?.label || 'Узел'"></h3>
-          <button class="link" @click="closeNodeCard" title="Закрыть">×</button>
+          <h3 data-role="node-title">Узел</h3>
+          <button class="link" data-action="close-node-card" title="Закрыть">×</button>
         </header>
         <p class="node-card-meta">
-          <span x-text="'Тип: ' + (activeNode?.node_type || '-')"></span>
-          <span x-text="'Статус: ' + (activeNode?.status || '-')"></span>
+          <span data-role="node-type">Тип: -</span>
+          <span data-role="node-status">Статус: -</span>
         </p>
-        <p x-text="activeNode?.summary || 'Описание отсутствует'" class="node-card-summary"></p>
-        <div class="node-card-section" x-show="activeNode?.links?.length">
+        <p class="node-card-summary" data-role="node-summary">Описание отсутствует</p>
+        <div class="node-card-section" data-section="node-links" hidden>
           <h4>Ссылки</h4>
-          <ul>
-            <template x-for="link in activeNode.links" :key="`link-${link}`">
-              <li><a :href="link" target="_blank" rel="noreferrer" x-text="link"></a></li>
-            </template>
-          </ul>
+          <ul data-role="node-links"></ul>
         </div>
-        <div class="node-card-section" x-show="activeNode?.owners?.length">
+        <div class="node-card-section" data-section="node-owners" hidden>
           <h4>Ответственные</h4>
-          <ul>
-            <template x-for="owner in activeNode.owners" :key="`owner-${owner}`">
-              <li x-text="owner"></li>
-            </template>
-          </ul>
+          <ul data-role="node-owners"></ul>
         </div>
         <div class="node-card-actions">
-          <button class="secondary" @click="archiveNode" title="Перевести в архив">Архивировать</button>
-          <button class="secondary" @click="deleteNode" title="Удалить узел">Удалить</button>
+          <button class="secondary" data-action="archive-node" title="Перевести в архив">Архивировать</button>
+          <button class="secondary" data-action="delete-node" title="Удалить узел">Удалить</button>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- Node Modal -->
-  <div class="modal-overlay" x-show="modals.node" x-transition>
-    <div class="modal" @click.away="closeModal('node')">
+  <div class="modal-overlay" data-modal="node" hidden>
+    <div class="modal">
       <header>
         <h3>Новый узел</h3>
-        <button class="link" @click="closeModal('node')" title="Закрыть">×</button>
+        <button class="link" data-close-modal="node" title="Закрыть">×</button>
       </header>
       <div class="modal-body">
         <label class="field-label">Сфера</label>
-        <select class="field-input" x-model="nodeForm.sphereId">
+        <select class="field-input" data-field="node-sphere">
           <option value="">Выберите сферу</option>
-          <template x-for="sphere in spheres" :key="`modal-node-sphere-${sphere.id}`">
-            <option :value="sphere.id" x-text="sphere.name"></option>
-          </template>
         </select>
         <label class="field-label">Название</label>
-        <input class="field-input" type="text" x-model="nodeForm.label" placeholder="Service A" />
+        <input class="field-input" type="text" data-field="node-label" placeholder="Service A" />
         <label class="field-label">Тип</label>
-        <select class="field-input" x-model="nodeForm.nodeType">
-          <template x-for="type in nodeTypeOptions" :key="`modal-node-type-${type}`">
-            <option :value="type" x-text="type"></option>
-          </template>
-        </select>
+        <select class="field-input" data-field="node-type"></select>
         <label class="field-label">Статус</label>
-        <select class="field-input" x-model="nodeForm.status">
-          <template x-for="status in nodeStatusOptions" :key="`modal-node-status-${status}`">
-            <option :value="status" x-text="status"></option>
-          </template>
-        </select>
+        <select class="field-input" data-field="node-status"></select>
         <label class="field-label">Описание</label>
-        <textarea class="field-input" rows="3" x-model="nodeForm.summary"></textarea>
+        <textarea class="field-input" rows="3" data-field="node-summary"></textarea>
         <label class="field-label">Ссылки</label>
-        <textarea class="field-input" rows="2" x-model="nodeForm.links" placeholder="https://repo, https://ci"></textarea>
+        <textarea class="field-input" rows="2" data-field="node-links" placeholder="https://repo, https://ci"></textarea>
         <label class="field-label">Ответственные</label>
-        <input class="field-input" type="text" x-model="nodeForm.owners" placeholder="ivan, anna" />
+        <input class="field-input" type="text" data-field="node-owners" placeholder="ivan, anna" />
       </div>
       <footer>
-        <button class="secondary" @click="closeModal('node')">Отмена</button>
-        <button class="primary" @click="createNode">Создать</button>
+        <button class="secondary" data-close-modal="node">Отмена</button>
+        <button class="primary" data-action="create-node">Создать</button>
       </footer>
     </div>
   </div>
 
-  <!-- Edge Modal -->
-  <div class="modal-overlay" x-show="modals.edge" x-transition>
-    <div class="modal" @click.away="closeModal('edge')">
+  <div class="modal-overlay" data-modal="edge" hidden>
+    <div class="modal">
       <header>
         <h3>Новая связь</h3>
-        <button class="link" @click="closeModal('edge')" title="Закрыть">×</button>
+        <button class="link" data-close-modal="edge" title="Закрыть">×</button>
       </header>
       <div class="modal-body">
         <label class="field-label">Сфера</label>
-        <select class="field-input" x-model="edgeForm.sphereId" @change="syncEdgeNodes">
+        <select class="field-input" data-field="edge-sphere">
           <option value="">Выберите сферу</option>
-          <template x-for="sphere in spheres" :key="`modal-edge-sphere-${sphere.id}`">
-            <option :value="sphere.id" x-text="sphere.name"></option>
-          </template>
         </select>
         <label class="field-label">Тип связи</label>
-        <select class="field-input" x-model="edgeForm.relationType">
-          <template x-for="type in edgeTypeOptions" :key="`modal-edge-type-${type}`">
-            <option :value="type" x-text="type"></option>
-          </template>
-        </select>
+        <select class="field-input" data-field="edge-type"></select>
         <label class="field-label">Источник</label>
-        <select class="field-input" x-model="edgeForm.source">
+        <select class="field-input" data-field="edge-source">
           <option value="">Выберите узел</option>
-          <template x-for="node in edgeCandidateNodes" :key="`modal-edge-source-${node.id}`">
-            <option :value="node.id" x-text="node.label"></option>
-          </template>
         </select>
         <label class="field-label">Цель</label>
-        <select class="field-input" x-model="edgeForm.target">
+        <select class="field-input" data-field="edge-target">
           <option value="">Выберите узел</option>
-          <template x-for="node in edgeCandidateNodes" :key="`modal-edge-target-${node.id}`">
-            <option :value="node.id" x-text="node.label"></option>
-          </template>
         </select>
       </div>
       <footer>
-        <button class="secondary" @click="closeModal('edge')">Отмена</button>
-        <button class="primary" @click="createEdge">Создать</button>
+        <button class="secondary" data-close-modal="edge">Отмена</button>
+        <button class="primary" data-action="create-edge">Создать</button>
       </footer>
     </div>
   </div>
 
-  <!-- Sphere Modal -->
-  <div class="modal-overlay" x-show="modals.sphere" x-transition>
-    <div class="modal" @click.away="closeModal('sphere')">
+  <div class="modal-overlay" data-modal="sphere" hidden>
+    <div class="modal">
       <header>
         <h3>Новая сфера</h3>
-        <button class="link" @click="closeModal('sphere')" title="Закрыть">×</button>
+        <button class="link" data-close-modal="sphere" title="Закрыть">×</button>
       </header>
       <div class="modal-body">
         <label class="field-label">Название</label>
-        <input class="field-input" type="text" x-model="sphereForm.name" placeholder="Продукт" />
+        <input class="field-input" type="text" data-field="sphere-name" placeholder="Продукт" />
         <label class="field-label">Описание</label>
-        <textarea class="field-input" rows="3" x-model="sphereForm.description"></textarea>
+        <textarea class="field-input" rows="3" data-field="sphere-description"></textarea>
         <label class="field-label">Цвет</label>
-        <input class="field-input" type="color" x-model="sphereForm.color" />
+        <input class="field-input" type="color" data-field="sphere-color" />
       </div>
       <footer>
-        <button class="secondary" @click="closeModal('sphere')">Отмена</button>
-        <button class="primary" @click="createSphere">Создать</button>
+        <button class="secondary" data-close-modal="sphere">Отмена</button>
+        <button class="primary" data-action="create-sphere">Создать</button>
       </footer>
     </div>
   </div>
 
-  <!-- Export / Import Modal -->
-  <div class="modal-overlay" x-show="modals.export" x-transition>
-    <div class="modal large" @click.away="closeModal('export')">
+  <div class="modal-overlay" data-modal="export" hidden>
+    <div class="modal large">
       <header>
         <h3>Экспорт / импорт графа</h3>
-        <button class="link" @click="closeModal('export')" title="Закрыть">×</button>
+        <button class="link" data-close-modal="export" title="Закрыть">×</button>
       </header>
       <div class="modal-body">
         <p class="hint">Экспорт формирует JSON. Для импорта вставьте подготовленный JSON и нажмите «Импортировать».</p>
-        <textarea class="field-input" rows="12" x-model="exportData" spellcheck="false"></textarea>
+        <textarea class="field-input" rows="12" data-field="export-data" spellcheck="false"></textarea>
       </div>
       <footer>
-        <button class="secondary" @click="loadExport" title="Создать экспорт">Экспортировать</button>
-        <button class="secondary" @click="closeModal('export')">Закрыть</button>
-        <button class="primary" @click="importGraph">Импортировать</button>
+        <button class="secondary" data-action="load-export" title="Создать экспорт">Экспортировать</button>
+        <button class="secondary" data-close-modal="export">Закрыть</button>
+        <button class="primary" data-action="import-graph">Импортировать</button>
       </footer>
     </div>
   </div>
