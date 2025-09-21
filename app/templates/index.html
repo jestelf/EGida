@@ -95,8 +95,8 @@
   <section class="map-shell">
     <div class="map-container">
       <div id="cy" class="map-view" title="Интерактивная карта"></div>
-      <div class="fab" title="Создать" @click="toggleActions">+</div>
-      <div class="fab-menu" x-show="modals.actions" @click.outside="closeModal('actions')" x-transition>
+      <div class="fab" title="Создать" @click.stop="toggleActions">+</div>
+      <div class="fab-menu" x-show="modals.actions" @click.away="closeModal('actions')" x-transition>
         <button @click="closeModal('actions'); openModal('node')" title="Добавить узел">Добавить узел</button>
         <button @click="closeModal('actions'); openModal('edge')" title="Добавить связь">Добавить связь</button>
         <button @click="closeModal('actions'); openModal('sphere')" title="Создать сферу">Создать сферу</button>
@@ -139,7 +139,7 @@
 
   <!-- Node Modal -->
   <div class="modal-overlay" x-show="modals.node" x-transition>
-    <div class="modal" @click.outside="closeModal('node')">
+    <div class="modal" @click.away="closeModal('node')">
       <header>
         <h3>Новый узел</h3>
         <button class="link" @click="closeModal('node')" title="Закрыть">×</button>
@@ -182,7 +182,7 @@
 
   <!-- Edge Modal -->
   <div class="modal-overlay" x-show="modals.edge" x-transition>
-    <div class="modal" @click.outside="closeModal('edge')">
+    <div class="modal" @click.away="closeModal('edge')">
       <header>
         <h3>Новая связь</h3>
         <button class="link" @click="closeModal('edge')" title="Закрыть">×</button>
@@ -225,7 +225,7 @@
 
   <!-- Sphere Modal -->
   <div class="modal-overlay" x-show="modals.sphere" x-transition>
-    <div class="modal" @click.outside="closeModal('sphere')">
+    <div class="modal" @click.away="closeModal('sphere')">
       <header>
         <h3>Новая сфера</h3>
         <button class="link" @click="closeModal('sphere')" title="Закрыть">×</button>
@@ -247,7 +247,7 @@
 
   <!-- Export / Import Modal -->
   <div class="modal-overlay" x-show="modals.export" x-transition>
-    <div class="modal large" @click.outside="closeModal('export')">
+    <div class="modal large" @click.away="closeModal('export')">
       <header>
         <h3>Экспорт / импорт графа</h3>
         <button class="link" @click="closeModal('export')" title="Закрыть">×</button>

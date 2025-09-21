@@ -58,8 +58,13 @@ def read_map(
         node_query = node_query.where(Node.node_type == node_type)
     if status_value is not None:
         node_query = node_query.where(Node.status == status_value)
-    if search:
-        like = f"%{search.lower()}%"
+    search_value: Optional[str]
+    if isinstance(search, str):
+        search_value = search.strip().lower()
+    else:
+        search_value = None
+    if search_value:
+        like = f"%{search_value}%"
         node_query = node_query.where(Node.label.ilike(like) | Node.summary.ilike(like))
 
     nodes = session.scalars(node_query.order_by(Node.created_at.desc())).all()
