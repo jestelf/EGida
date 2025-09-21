@@ -16,6 +16,7 @@ engine = create_engine(
     echo=settings.sqlite_echo,
     future=True,
     connect_args=connect_args,
+    pool_pre_ping=True,
 )
 
 
@@ -26,6 +27,7 @@ if engine.url.get_backend_name() == "sqlite":
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.execute(f"PRAGMA journal_mode={settings.sqlite_journal_mode}")
+        cursor.execute("PRAGMA synchronous=NORMAL;")
         cursor.close()
 
 
