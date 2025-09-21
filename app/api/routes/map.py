@@ -3,14 +3,14 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import AliasChoices
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import get_current_user, get_db
 from app.models import Edge, Node, Sphere, User
-from app.schemas.graph import NODE_STATUSES, NODE_TYPES, EdgeRead, NodeRead
+from app.schemas.graph import NODE_STATUSES, NODE_TYPES
 from app.schemas.map import MapResponse
-from app.schemas.organization import SphereRead
 from app.services import organizations as org_service
 
 router = APIRouter()
@@ -25,10 +25,25 @@ def _validate_filters(node_type: Optional[str], status_value: Optional[str]) -> 
 
 @router.get("/", response_model=MapResponse)
 def read_map(
-    organization_id: int = Query(..., description="Organization identifier"),
+    organization_id: int = Query(
+        ...,
+        alias="org_id",
+        validation_alias=AliasChoices("organization_id", "org_id"),
+        description="Organization identifier",
+    ),
     sphere_id: Optional[int] = Query(None, description="Limit nodes to a sphere"),
-    node_type: Optional[str] = Query(None, description="Filter by node type"),
-    status_value: Optional[str] = Query(None, alias="status", description="Filter by node status"),
+    node_type: Optional[str] = Query(
+        None,
+        alias="type",
+        validation_alias=AliasChoices("node_type", "type"),
+        description="Filter by node type",
+    ),
+    status_value: Optional[str] = Query(
+        None,
+        alias="status",
+        validation_alias=AliasChoices("status_value", "status"),
+        description="Filter by node status",
+    ),
     search: Optional[str] = Query(None, description="Case-insensitive search by label or summary"),
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_db),
@@ -84,9 +99,9 @@ def read_map(
         edge_query = edge_query.where(Edge.source_node_id.in_(node_ids)).where(Edge.target_node_id.in_(node_ids))
         edges = session.scalars(edge_query).all()
 
-    return MapResponse(
+    return MapResponse.from_entities(
         organization_id=organization_id,
-        spheres=[SphereRead.model_validate(sphere) for sphere in spheres],
-        nodes=[NodeRead.model_validate(node) for node in nodes],
-        edges=[EdgeRead.model_validate(edge) for edge in edges],
+        spheres=spheres,
+        nodes=nodes,
+        edges=edges,
     )
