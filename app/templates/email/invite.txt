@@ -1,0 +1,10 @@
+﻿{{ project_name }} — приглашение
+
+Вы приглашены в организацию {{ organization_name }}.
+Отправитель: {{ inviter_email }}
+Email для входа: {{ invitee_email }}
+Роль после принятия: {{ role }}
+{% if group_names %}Группы: {{ group_names | join(', ') }}
+{% endif %}Срок действия приглашения истекает: {{ expires_at }}
+
+Принять: {{ invite_link }}

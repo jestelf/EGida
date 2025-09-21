@@ -1,0 +1,71 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "egida"
+version = "0.1.0"
+description = "EGida MVP skeleton service."
+requires-python = ">=3.10"
+authors = [{ name = "EGida Team" }]
+readme = "README.md"
+dependencies = [
+  "fastapi>=0.110.0",
+  "uvicorn[standard]>=0.24.0",
+  "sqlalchemy>=2.0.25",
+  "alembic>=1.12.1",
+  "pydantic[email]>=2.6.4",
+  "pydantic-settings>=2.2.1",
+  "python-jose[cryptography]>=3.3.0",
+  "passlib[bcrypt]>=1.7.4",
+  "jinja2>=3.1.2",
+  "python-multipart>=0.0.6",
+  "email-validator>=2.0.0.post2"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.4.4",
+  "httpx>=0.25.1",
+  "pytest-asyncio>=0.22.0",
+  "ruff>=0.1.7",
+  "black>=23.12.1",
+  "mypy>=1.8.0"
+]
+
+devops = [
+  "docker-compose>=1.29.2"
+]
+
+[tool.black]
+target-version = ["py311"]
+line-length = 100
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "I", "UP", "B", "N", "Q"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.mypy]
+plugins = []
+ignore_missing_imports = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app", "app.*"]
+exclude = [
+  "tests",
+  "tests.*",
+  "docs",
+  "docs.*",
+  "alembic",
+  "alembic.*",
+  "data",
+  "data.*"
+]

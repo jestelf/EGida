@@ -1,0 +1,29 @@
+﻿<!DOCTYPE html>
+<html lang="ru" x-data="{}">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ project_name }} · EGida</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/main.css') }}" />
+    <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
+    <script src="https://unpkg.com/alpinejs@3.13.10" defer></script>
+    <script src="https://unpkg.com/cytoscape@3.26.0/dist/cytoscape.min.js" defer></script>
+    <script src="{{ url_for('static', path='js/app.js') }}" defer></script>
+  </head>
+  <body>
+    <header class="header">
+      <div class="logo">{{ project_name }}</div>
+      <nav class="nav">
+        <a href="#map" class="nav-link">Карта</a>
+        <a href="#nodes" class="nav-link">Узлы</a>
+        <a href="#spheres-panel" class="nav-link">Сферы</a>
+        <a href="#groups" class="nav-link">Группы</a>
+        <a href="#settings" class="nav-link">Настройки</a>
+        <a href="/api/docs" target="_blank" rel="noreferrer" class="nav-link">API</a>
+      </nav>
+    </header>
+    <main class="main">
+      {% block content %}{% endblock %}
+    </main>
+  </body>
+</html>
