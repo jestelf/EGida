@@ -15,6 +15,7 @@
       <label class="field-label" for="org-id">ID организации</label>
       <input id="org-id" class="field-input" type="number" placeholder="1" />
       <button class="primary" data-action="load-org" title="Загрузить данные">Загрузить</button>
+      <button class="secondary" data-open-modal="organization" title="Зарегистрировать новую организацию">Создать организацию</button>
       <div class="alert" data-role="error" hidden></div>
       <p class="hint success" data-role="notice" hidden></p>
     </section>
@@ -51,13 +52,13 @@
       </div>
     </section>
 
-    <section class="sidebar-block" id="quick-list">
+    <section class="sidebar-block" id="nodes">
       <h2>Активные узлы</h2>
       <ul class="mini-list" data-role="quick-list"></ul>
     </section>
   </aside>
 
-  <section class="map-shell">
+  <section class="map-shell" id="map">
     <div class="map-container">
       <div id="cy" class="map-view" title="Интерактивная карта"></div>
       <div class="fab" title="Создать" data-action="toggle-actions">+</div>
@@ -192,5 +193,29 @@
       </footer>
     </div>
   </div>
+
+  <div class="modal-overlay" data-modal="organization" hidden>
+    <div class="modal">
+      <header>
+        <h3>Новая организация</h3>
+        <button class="link" data-close-modal="organization" title="Закрыть">×</button>
+      </header>
+      <div class="modal-body">
+        <label class="field-label">Название</label>
+        <input class="field-input" type="text" data-field="organization-name" placeholder="ООО «Пример»" />
+        <label class="field-label">Идентификатор (slug)</label>
+        <input class="field-input" type="text" data-field="organization-slug" placeholder="primer" />
+        <label class="field-label">Описание</label>
+        <textarea class="field-input" rows="3" data-field="organization-description"></textarea>
+      </div>
+      <footer>
+        <button class="secondary" data-close-modal="organization">Отмена</button>
+        <button class="primary" data-action="create-organization">Создать</button>
+      </footer>
+    </div>
+  </div>
+
+  <span id="groups" class="anchor-target" aria-hidden="true"></span>
+  <span id="settings" class="anchor-target" aria-hidden="true"></span>
 </section>
 {% endblock %}

@@ -4,6 +4,64 @@ const NODE_TYPES = ["api", "event", "service", "store", "task", "ui"];
 const NODE_STATUSES = ["active", "archived"];
 const EDGE_TYPES = ["uses", "produces", "consumes", "depends"];
 
+const CYRILLIC_TO_LATIN_MAP = {
+  а: "a",
+  б: "b",
+  в: "v",
+  г: "g",
+  д: "d",
+  е: "e",
+  ё: "e",
+  ж: "zh",
+  з: "z",
+  и: "i",
+  й: "i",
+  к: "k",
+  л: "l",
+  м: "m",
+  н: "n",
+  о: "o",
+  п: "p",
+  р: "r",
+  с: "s",
+  т: "t",
+  у: "u",
+  ф: "f",
+  х: "h",
+  ц: "ts",
+  ч: "ch",
+  ш: "sh",
+  щ: "sch",
+  ъ: "",
+  ы: "y",
+  ь: "",
+  э: "e",
+  ю: "yu",
+  я: "ya",
+};
+
+function transliterateCyrillic(value) {
+  return String(value || "")
+    .toLowerCase()
+    .split("")
+    .map((char) => (Object.prototype.hasOwnProperty.call(CYRILLIC_TO_LATIN_MAP, char) ? CYRILLIC_TO_LATIN_MAP[char] : char))
+    .join("");
+}
+
+function toSlug(value) {
+  if (typeof value !== "string" && typeof value !== "number") {
+    return "";
+  }
+  const transliterated = transliterateCyrillic(value);
+  return transliterated
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64);
+}
+
 const NODE_COLORS = {
   api: "#38bdf8",
   event: "#fb923c",
@@ -417,6 +475,7 @@ class OrgDashboard {
       edge: false,
       sphere: false,
       export: false,
+      organization: false,
     };
     this.filters = {
       sphereId: "",
@@ -444,6 +503,12 @@ class OrgDashboard {
       description: "",
       color: "#38bdf8",
     };
+    this.organizationForm = {
+      name: "",
+      slug: "",
+      description: "",
+    };
+    this.organizationSlugTouched = false;
     this.edgeCandidateNodes = [];
     this.exportData = "";
     this.activeNodeId = null;
@@ -559,7 +624,13 @@ class OrgDashboard {
         description: root.querySelector('[data-field="sphere-description"]'),
         color: root.querySelector('[data-field="sphere-color"]'),
       },
+      organizationFormFields: {
+        name: root.querySelector('[data-field="organization-name"]'),
+        slug: root.querySelector('[data-field="organization-slug"]'),
+        description: root.querySelector('[data-field="organization-description"]'),
+      },
       exportField: root.querySelector('[data-field="export-data"]'),
+      createOrganizationButton: root.querySelector('[data-action="create-organization"]'),
     };
     this.modalOverlays = new Map();
     root.querySelectorAll('[data-modal]').forEach((overlay) => {
@@ -651,7 +722,9 @@ class OrgDashboard {
       nodeFormFields,
       edgeFormFields,
       sphereFormFields,
+      organizationFormFields,
       exportField,
+      createOrganizationButton,
     } = this.elements;
 
     if (tokenInput) {
@@ -775,6 +848,11 @@ class OrgDashboard {
         this.createSphere();
       });
     }
+    if (createOrganizationButton) {
+      createOrganizationButton.addEventListener("click", () => {
+        this.createOrganization();
+      });
+    }
     if (loadExportButton) {
       loadExportButton.addEventListener("click", () => {
         this.loadExport();
@@ -856,6 +934,31 @@ class OrgDashboard {
         this.sphereForm.color = event.target.value;
       });
     }
+    if (organizationFormFields?.name) {
+      organizationFormFields.name.addEventListener("input", (event) => {
+        const value = event.target.value ?? "";
+        this.organizationForm.name = value;
+        if (!this.organizationSlugTouched && organizationFormFields.slug) {
+          const generated = toSlug(value);
+          this.organizationForm.slug = generated;
+          organizationFormFields.slug.value = generated;
+        }
+      });
+    }
+    if (organizationFormFields?.slug) {
+      organizationFormFields.slug.addEventListener("input", (event) => {
+        const raw = event.target.value ?? "";
+        this.organizationSlugTouched = true;
+        const normalized = toSlug(raw);
+        this.organizationForm.slug = normalized;
+        event.target.value = normalized;
+      });
+    }
+    if (organizationFormFields?.description) {
+      organizationFormFields.description.addEventListener("input", (event) => {
+        this.organizationForm.description = event.target.value ?? "";
+      });
+    }
     if (exportField) {
       exportField.addEventListener("input", (event) => {
         this.exportData = event.target.value;
@@ -895,6 +998,7 @@ class OrgDashboard {
     this.updateNodeFormFields();
     this.updateEdgeFormFields();
     this.updateSphereFormFields();
+    this.updateOrganizationFormFields();
     this.updateExportField();
   }
 
@@ -1303,6 +1407,31 @@ class OrgDashboard {
     }
   }
 
+  updateOrganizationFormFields() {
+    const { organizationFormFields } = this.elements;
+    if (!organizationFormFields) {
+      return;
+    }
+    if (organizationFormFields.name) {
+      organizationFormFields.name.value = this.organizationForm.name;
+    }
+    if (organizationFormFields.slug) {
+      organizationFormFields.slug.value = this.organizationForm.slug;
+    }
+    if (organizationFormFields.description) {
+      organizationFormFields.description.value = this.organizationForm.description;
+    }
+  }
+
+  resetOrganizationForm() {
+    this.organizationForm = {
+      name: "",
+      slug: "",
+      description: "",
+    };
+    this.organizationSlugTouched = false;
+  }
+
   updateExportField() {
     const { exportField } = this.elements;
     if (!exportField) {
@@ -1374,8 +1503,7 @@ class OrgDashboard {
     }
     return headers;
   }
-
-  ensureAuthContext() {
+  ensureToken() {
     let token = this.token.trim();
     if (!token) {
       const storedToken = this.readStoredValue(STORAGE_KEYS.token).trim();
@@ -1391,6 +1519,19 @@ class OrgDashboard {
       this.error = "Введите токен доступа";
       this.notice = "";
       this.updateUI();
+      return null;
+    }
+    this.token = token;
+    this.writeStoredValue(STORAGE_KEYS.token, token);
+    if (this.elements.tokenInput) {
+      this.elements.tokenInput.value = token;
+    }
+    return token;
+  }
+
+  ensureAuthContext() {
+    const token = this.ensureToken();
+    if (!token) {
       return null;
     }
     let rawOrgId = String(this.organizationId ?? "").trim();
@@ -1419,12 +1560,7 @@ class OrgDashboard {
     }
     const normalized = String(organizationId);
     this.organizationId = normalized;
-    this.token = token;
     this.writeStoredValue(STORAGE_KEYS.organizationId, normalized);
-    this.writeStoredValue(STORAGE_KEYS.token, token);
-    if (this.elements.tokenInput) {
-      this.elements.tokenInput.value = token;
-    }
     if (this.elements.orgInput) {
       this.elements.orgInput.value = normalized;
     }
@@ -1544,7 +1680,7 @@ class OrgDashboard {
   async loadOrg() {
     const organizationId = this.ensureAuthContext();
     if (organizationId === null) {
-      return;
+      return false;
     }
     this.error = "";
     this.notice = "";
@@ -1573,10 +1709,12 @@ class OrgDashboard {
       this.notice = "Данные организации загружены";
       this.error = "";
       this.updateUI();
+      return true;
     } catch (error) {
       this.error = error instanceof Error ? error.message : "Не удалось загрузить организацию";
       this.notice = "";
       this.updateUI();
+      return false;
     }
   }
 
@@ -1835,6 +1973,9 @@ class OrgDashboard {
     if (name === "export") {
       this.loadExport();
     }
+    if (name === "organization") {
+      this.resetOrganizationForm();
+    }
     this.updateUI();
   }
 
@@ -1864,6 +2005,75 @@ class OrgDashboard {
     this.edgeForm.source = "";
     this.edgeForm.target = "";
     this.updateUI();
+  }
+
+  async createOrganization() {
+    const token = this.ensureToken();
+    if (!token) {
+      return;
+    }
+    const name = this.organizationForm.name.trim();
+    if (!name) {
+      this.error = "Укажите название организации";
+      this.notice = "";
+      this.updateUI();
+      return;
+    }
+    let slug = this.organizationForm.slug.trim();
+    if (!slug) {
+      slug = toSlug(name);
+    }
+    if (!slug) {
+      slug = `org-${Date.now()}`;
+    }
+    this.organizationForm.slug = slug;
+    const description = this.organizationForm.description.trim();
+    const payload = { name, slug };
+    if (description) {
+      payload.description = description;
+    }
+    const headers = this.authHeaders({ "Content-Type": "application/json" });
+    this.notice = "";
+    this.error = "";
+    try {
+      const response = await ensureOk(
+        await fetch("/api/organizations", {
+          method: "POST",
+          headers,
+          body: JSON.stringify(payload),
+        }),
+        "Не удалось создать организацию",
+      );
+      const data = await response.json();
+      const createdId = Number(data?.id);
+      const displayName =
+        typeof data?.name === "string" && data.name.trim() ? data.name.trim() : name;
+      this.modals.organization = false;
+      let normalizedId = null;
+      if (Number.isFinite(createdId) && createdId > 0) {
+        normalizedId = String(createdId);
+        this.organizationId = normalizedId;
+        this.writeStoredValue(STORAGE_KEYS.organizationId, normalizedId);
+        if (this.elements.orgInput) {
+          this.elements.orgInput.value = normalizedId;
+        }
+      }
+      this.resetOrganizationForm();
+      let loaded = true;
+      if (normalizedId) {
+        loaded = (await this.loadOrg()) !== false;
+      } else {
+        this.updateUI();
+      }
+      if (loaded) {
+        this.notice = `Организация "${displayName}" создана`;
+        this.error = "";
+        this.updateUI();
+      }
+    } catch (error) {
+      this.error = error instanceof Error ? error.message : "Ошибка создания организации";
+      this.updateUI();
+    }
   }
 
   async createNode() {
