@@ -95,7 +95,7 @@
   <section class="map-shell">
     <div class="map-container">
       <div id="cy" class="map-view" title="Интерактивная карта"></div>
-      <div class="fab" title="Создать" @click="toggleActions">+</div>
+      <div class="fab" title="Создать" @click.stop="toggleActions">+</div>
       <div class="fab-menu" x-show="modals.actions" @click.away="closeModal('actions')" x-transition>
         <button @click="closeModal('actions'); openModal('node')" title="Добавить узел">Добавить узел</button>
         <button @click="closeModal('actions'); openModal('edge')" title="Добавить связь">Добавить связь</button>
